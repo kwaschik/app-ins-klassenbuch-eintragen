@@ -19,7 +19,7 @@ import {
 } from '@airtable/blocks/ui';
 import React, { useState } from 'react';
 
-const version = "1.0.2";
+const version = "1.0.3";
 
 class LerneinheitenAuswahl extends React.Component {
         shouldComponentUpdate(nextProps) {
@@ -319,6 +319,7 @@ function EintragInsKlassenbuchApp() {
         }
         const loadLerneinheiten = async function () {
                 const queryResult = lerneinheiten.selectRecords({
+			sorts:[{field: inhalt.getFieldByName("Sortierung")}, {field: inhalt.getFieldByName("Name")}],
                         fields:["Name", "Inhaltliche Einordnung", "Klassenbuch", "Jahrgang allgemein", "Jahrgang abgeschlossen"]
                 });
                 await queryResult.loadDataAsync();
