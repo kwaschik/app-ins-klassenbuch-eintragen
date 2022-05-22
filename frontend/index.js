@@ -19,7 +19,7 @@ import {
 } from '@airtable/blocks/ui';
 import React, { useState } from 'react';
 
-const version = "1.0.3";
+const version = "1.0.4";
 
 class LerneinheitenAuswahl extends React.Component {
         shouldComponentUpdate(nextProps) {
