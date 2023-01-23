@@ -19,7 +19,7 @@ import {
 } from '@airtable/blocks/ui';
 import React, { useState } from 'react';
 
-const version = "1.0.4";
+const version = "1.0.7";
 
 class LerneinheitenAuswahl extends React.Component {
         shouldComponentUpdate(nextProps) {
@@ -145,6 +145,7 @@ function EintragInsKlassenbuchApp() {
         const base = useBase();
         const Airtable = require("airtable");
         const inhalt = base.getTableByName("Inhalt");
+        const orte = base.getTableByName("Ort");
         const jahrgaenge = base.getTableByName("Jahrgang");
         const faecher = inhalt.getViewByName("Unterrichtsfach");
         const themen = inhalt.getViewByName("Thema");
@@ -156,6 +157,7 @@ function EintragInsKlassenbuchApp() {
         const assist = personal.getViewByName("Assistent:in");
 
         const nil = {id: "", name: ""};
+        const [getOrt, setOrt] = useState(nil);
         const [getJahrgang, setJahrgang] = useState(nil);
         const [getFach, setFach] = useState(nil);
         const [getThema, setThema] = useState(nil);
@@ -187,6 +189,7 @@ function EintragInsKlassenbuchApp() {
         });
 
         const reset = function () {
+                setOrt(nil);
                 setJahrgang(nil);
                 setFach(nil);
                 setThema(nil);
@@ -293,19 +296,32 @@ function EintragInsKlassenbuchApp() {
                 }));
                 queryResult.unloadData();
         }
+	const selectOrt = async function() {
+		const queryResult = orte.selectRecords();
+		await queryResult.loadDataAsync();
+		const records = queryResult.records;
+		const rec = await expandRecordPickerAsync(records);
+		if (rec !== null) {
+			let newOrt = {id: rec.id, name: rec.name};
+			setOrt(newOrt);
+		} else {
+			setOrt(nil);
+		}
+		queryResult.unloadData();
+	}
         const selectJahrgang = async function () {
                 if (getLerneinheiten.length > 0)
                         setIsInhaltLoading(true);
 
                 const queryResult = jahrgaenge.selectRecords({
                         sorts:[{field: jahrgaenge.getFieldByName("Name"), direction: "desc"}],
-                        fields:["Name"]
+                        fields:["Name", "Ort"]
                 });
                 await queryResult.loadDataAsync();
-                const records = queryResult.records;
+                const records = queryResult.records.filter(r => r.getCellValue("Ort")?.some(o => o.id === getOrt?.id));
                 const rec = await expandRecordPickerAsync(records);
                 if (rec !== null) {
-                        let newJahrgang = {id: rec.id, name: rec.name };
+                        let newJahrgang = {id: rec.id, name: rec.name};
                         setJahrgang(newJahrgang);
                 } else {
                         setJahrgang(nil);
@@ -454,8 +470,13 @@ function EintragInsKlassenbuchApp() {
                         style={{"background": "no-repeat center/contain url(https://dl.airtable.com/.attachments/d0cad55e7b6d128fa975a0299e9f9ebc/1b6ffe2b/STILL-ACADEMY-Osteopathieschule-in-Deutschland-Logo.png)"
                         }}>
                 </Box>
+                <FormField label="Ort"> 
+                        <Button icon="link1" onClick={selectOrt}>{getOrt.id === "" ? "Datensatz auswählen ..." : getOrt.name}</Button>
+                </FormField>
                 <FormField label="Jahrgang*"> 
-                        <Button icon="link1" onClick={selectJahrgang}>{getJahrgang.id === "" ? "Datensatz auswählen ..." : getJahrgang.name}</Button>
+                        <Button icon="link1" onClick={getOrt.id === "" ? selectOrt : selectJahrgang}>
+				{getJahrgang.id === "" ? "Datensatz auswählen ..." : getJahrgang.name}
+			</Button>
                 </FormField>
                 <FormField label="Unterrichtsfach">
                         <Button icon="link1" onClick={selectFach}>{getFach.id === "" ? "Datensatz auswählen ..." : getFach.name}</Button>
