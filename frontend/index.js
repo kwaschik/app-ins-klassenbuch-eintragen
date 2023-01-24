@@ -2,6 +2,7 @@ import { globalConfig } from '@airtable/blocks';
 import {
          initializeBlock,
          useBase,
+         useSession,
          useSettingsButton,
          expandRecordList,
          expandRecordPickerAsync,
@@ -19,7 +20,7 @@ import {
 } from '@airtable/blocks/ui';
 import React, { useState } from 'react';
 
-const version = "1.0.7";
+const version = "1.0.6";
 
 class LerneinheitenAuswahl extends React.Component {
         shouldComponentUpdate(nextProps) {
@@ -58,10 +59,10 @@ class LerneinheitenAuswahl extends React.Component {
                         }
                         return 40;
                 }
-		const getFrequency = function (rec) {
-			return rec["Jahrgang allgemein"]?.filter(x => x.value.id === me.props.Jahrgang.id)?.length ?? 0;
-			//return `Diese Lerneinheit wurde im gewählten Jahrgang bisher ${rec["Jahrgang allgemein"]?.filter(x => x.value.id === me.props.Jahrgang.id).length ?? 0} Mal unterrichtet`;
-		}
+                const getFrequency = function (rec) {
+                        return rec["Jahrgang allgemein"]?.filter(x => x.value.id === me.props.Jahrgang.id)?.length ?? 0;
+                        //return `Diese Lerneinheit wurde im gewählten Jahrgang bisher ${rec["Jahrgang allgemein"]?.filter(x => x.value.id === me.props.Jahrgang.id).length ?? 0} Mal unterrichtet`;
+                }
                 const getFields = function (rec) {
                         let fields;
                         if (rec["Jahrgang allgemein"]?.some(x => x.value.id === me.props.Jahrgang.id)) {
@@ -122,19 +123,19 @@ class LerneinheitenAuswahl extends React.Component {
                                         .filter(filterFachThema)
                                         .map(r => <Box key={r.id} display="flex" alignItems="stretch" padding="1" marginBottom="2">
                                                         <Switch value={r.selected} onChange={_ => me.props.toggleSelected(r)} width="40px" backgroundColor="transparent"/>
-							<Tooltip content={`Diese Lerneinheit wurde im gewählten Jahrgang bisher ${getFrequency(r)} Mal unterrichtet`}
-								 placementX={Tooltip.placements.CENTER}
-    								 placementY={Tooltip.placements.BOTTOM}
-    								 shouldHideTooltipOnClick={true}
-								 disabled={getFrequency(r) === 0 ? true : false}>
-								<RecordCard key={r.id} flex="1 1 auto" 
-									height={getHeight(r)}
-									style={getStyle(r)}
-									record={enrichRecord(r)} 
-									fields={getFields(r)}
-									onClick={expandRecordIfPossible(r)}
-								/>
-							</Tooltip>
+                                                        <Tooltip content={`Diese Lerneinheit wurde im gewählten Jahrgang bisher ${getFrequency(r)} Mal unterrichtet`}
+                                                                 placementX={Tooltip.placements.CENTER}
+                                                                 placementY={Tooltip.placements.BOTTOM}
+                                                                 shouldHideTooltipOnClick={true}
+                                                                 disabled={getFrequency(r) === 0 ? true : false}>
+                                                                <RecordCard key={r.id} flex="1 1 auto" 
+                                                                        height={getHeight(r)}
+                                                                        style={getStyle(r)}
+                                                                        record={enrichRecord(r)} 
+                                                                        fields={getFields(r)}
+                                                                        onClick={expandRecordIfPossible(r)}
+                                                                />
+                                                        </Tooltip>
                                                 </Box>)
                                 }
                         </Box>;
@@ -143,6 +144,7 @@ class LerneinheitenAuswahl extends React.Component {
 
 function EintragInsKlassenbuchApp() {
         const base = useBase();
+        const session = useSession();
         const Airtable = require("airtable");
         const inhalt = base.getTableByName("Inhalt");
         const orte = base.getTableByName("Ort");
@@ -172,6 +174,7 @@ function EintragInsKlassenbuchApp() {
         const [getBemerkungen, setBemerkungen] = useState("");
         const [isWarningOpen, setIsWarningOpen] = useState(false);
         const [isStundenWarningOpen, setIsStundenWarningOpen] = useState(false);
+        const [isPermissionWarningOpen, setIsPermissionWarningOpen] = useState(false);
         const [isConfirmOpen, setIsConfirmOpen] = useState(false);
         const [isInhaltLoading, setIsInhaltLoading] = useState(false);
 
@@ -187,6 +190,7 @@ function EintragInsKlassenbuchApp() {
         useSettingsButton(function () {
                 setIsShowingSettings(!isShowingSettings);
         });
+        const [hasDozPermission, setHasDozPermission] = useState(false);
 
         const reset = function () {
                 setOrt(nil);
@@ -203,14 +207,19 @@ function EintragInsKlassenbuchApp() {
                 setHideFinishedLEs(false);
                 incCounter();
         }
-        const validate = function () {
+        const validate = async function () {
+                const _hasDozPermission = await checkDozPermission();
+                if (!_hasDozPermission) {
+                        setIsPermissionWarningOpen(true);
+                        return;
+                }
                 const stundenTest = (getStunden === "" ? "0.01" : getStunden);
 
                 if (getJahrgang.id === "" ||
                     getLerneinheiten.filter(r => r.selected).length === 0 ||
                     getDoz.length === 0 ||
                     getDatum === "" ||
-		    getStunden === "")
+                    getStunden === "")
                         setIsWarningOpen(true);
                 else if (isNaN(parseFloat(stundenTest)) || parseFloat(stundenTest).toString() !== stundenTest || parseFloat(stundenTest) < 0) 
                         setIsStundenWarningOpen(true);
@@ -218,6 +227,8 @@ function EintragInsKlassenbuchApp() {
                         setIsConfirmOpen(true);
         }
         const save = async function () {
+                if (!hasDozPermission)
+                        return;
                 if (klassenbuch.checkPermissionsForCreateRecord().hasPermission) {
                         await klassenbuch.createRecordAsync({
                                 "Dozent:in": getDoz.map(d => ({id: d.id})),
@@ -296,19 +307,19 @@ function EintragInsKlassenbuchApp() {
                 }));
                 queryResult.unloadData();
         }
-	const selectOrt = async function() {
-		const queryResult = orte.selectRecords();
-		await queryResult.loadDataAsync();
-		const records = queryResult.records;
-		const rec = await expandRecordPickerAsync(records);
-		if (rec !== null) {
-			let newOrt = {id: rec.id, name: rec.name};
-			setOrt(newOrt);
-		} else {
-			setOrt(nil);
-		}
-		queryResult.unloadData();
-	}
+        const selectOrt = async function() {
+                const queryResult = orte.selectRecords();
+                await queryResult.loadDataAsync();
+                const records = queryResult.records;
+                const rec = await expandRecordPickerAsync(records);
+                if (rec !== null) {
+                    let newOrt = {id: rec.id, name: rec.name};
+                        setOrt(newOrt);
+                } else {
+                        setOrt(nil);
+                }
+                queryResult.unloadData();
+        }
         const selectJahrgang = async function () {
                 if (getLerneinheiten.length > 0)
                         setIsInhaltLoading(true);
@@ -335,7 +346,7 @@ function EintragInsKlassenbuchApp() {
         }
         const loadLerneinheiten = async function () {
                 const queryResult = lerneinheiten.selectRecords({
-			sorts:[{field: inhalt.getFieldByName("Sortierung")}, {field: inhalt.getFieldByName("Name")}],
+                        sorts:[{field: inhalt.getFieldByName("Sortierung")}, {field: inhalt.getFieldByName("Name")}],
                         fields:["Name", "Inhaltliche Einordnung", "Klassenbuch", "Jahrgang allgemein", "Jahrgang abgeschlossen"]
                 });
                 await queryResult.loadDataAsync();
@@ -402,7 +413,6 @@ function EintragInsKlassenbuchApp() {
                 setIsInhaltLoading(false);
                 incCounter();
         }
-
         const selectDoz = async function () {
                 const queryResult = doz.selectRecords({
                         fields:["Name", "Rolle"]
@@ -420,6 +430,18 @@ function EintragInsKlassenbuchApp() {
                         setDoz([]);
                 }
                 queryResult.unloadData();
+        }
+        const checkDozPermission = async function () {
+                const queryResult = doz.selectRecords({
+                        fields:["Name", "Email"]
+                });
+                await queryResult.loadDataAsync();
+                const result = queryResult.records.some(d => 
+                        d.getCellValueAsString("Email").toLowerCase() === 
+                        session.currentUser.email.toLowerCase());
+                setHasDozPermission(result);
+                queryResult.unloadData();
+                return result;
         }
         const selectAssist = async function () {
                 const queryResult = assist.selectRecords({
@@ -523,11 +545,11 @@ function EintragInsKlassenbuchApp() {
 
                 <Button marginRight="3" type="submit" onClick={validate}>Speichern</Button>
                 <Button type="reset" onClick={reset}>Zurücksetzen</Button>
-		<Box display="flex" justifyContent="flex-end">
-			<Text size="small" textColor="light">
-				Version: {version}
-			</Text>
-		</Box>
+                <Box display="flex" justifyContent="flex-end">
+                        <Text size="small" textColor="light">
+                                Version: {version}
+                        </Text>
+                </Box>
                 {isWarningOpen && 
                         (<Dialog onClose={()=>setIsWarningOpen(false)}>
                                 <Dialog.CloseButton />
@@ -547,6 +569,21 @@ function EintragInsKlassenbuchApp() {
                                 <Heading>Fehlerhafte Eingabe</Heading>
                                 <Text variant="paragraph">Der eingegebene Stunden-Wert '{getStunden}' ist ungültig.</Text>
                                 <Button marginRight="3" onClick={()=>setIsStundenWarningOpen(false)}>Ok</Button>
+                        </Dialog>)}
+                {isPermissionWarningOpen &&
+                        (<Dialog onClose={()=>setIsPermissionWarningOpen(false)}>
+                                <Dialog.CloseButton />
+                                <Heading>Fehlende Berechtigung</Heading>
+                                <Text variant="paragraph">
+                                        Der/die aktuelle Benutzer:in '{session.currentUser.name} ({session.currentUser.email})' 
+                                        ist in der Personaltabelle nicht bzw. nur ohne Dozent:in-Rolle vorhanden.
+                                        Die Dozent:in-Rolle ist notwendig, um Daten mit Hilfe der App speichern zu können.
+                                </Text>
+                                <Text variant="paragraph">
+                                        Die Zuordnung muss unter Verwendung der o.g. Email-Adresse erfolgen.
+                                </Text>
+
+                                <Button marginRight="3" onClick={()=>setIsPermissionWarningOpen(false)}>Ok</Button>
                         </Dialog>)}
                 {isConfirmOpen &&
                         (<Dialog onClose={()=>setIsConfirmOpen(false)}>
