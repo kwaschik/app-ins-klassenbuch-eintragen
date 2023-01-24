@@ -313,7 +313,7 @@ function EintragInsKlassenbuchApp() {
                 const records = queryResult.records;
                 const rec = await expandRecordPickerAsync(records);
                 if (rec !== null) {
-                    let newOrt = {id: rec.id, name: rec.name};
+                        let newOrt = {id: rec.id, name: rec.name};
                         setOrt(newOrt);
                 } else {
                         setOrt(nil);
